@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shorts Studio</title>
+  <style>
+    :root { color-scheme:dark; --bg:#0d0f13; --panel:#181b21; --line:#30343d; --ink:#f5f4f0; --muted:#aaadb5; --accent:#b8f36b; --orange:#ffd17c; --red:#ff987d; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(ellipse at 85% 0%,#27313d 0,transparent 34%),var(--bg); color:var(--ink); font:15px/1.5 Segoe UI,Arial,sans-serif; }
+    main { max-width:1120px; margin:0 auto; padding:28px 18px 64px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:22px; }
+    .brand { display:flex; gap:12px; align-items:center; }.mark { display:grid; place-items:center; width:42px; height:42px; border-radius:13px; color:#111; background:var(--accent); font-size:20px; font-weight:900; }
+    h1 { font-size:22px; margin:0; letter-spacing:-.03em; }.sub { color:var(--muted); font-size:13px; }.badge { max-width:100%; white-space:normal; border:1px solid var(--line); border-radius:999px; padding:7px 11px; color:var(--muted); font-size:12px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }.panel { min-width:0; padding:20px; background:rgba(24,27,33,.96); border:1px solid var(--line); border-radius:17px; box-shadow:0 12px 36px #0002; }.wide { grid-column:1/-1; }
+    h2 { margin:4px 0 12px; font-size:16px; }.pill { color:var(--accent); font-size:11px; font-weight:800; letter-spacing:.11em; text-transform:uppercase; }
+    label { display:block; margin:13px 0 6px; color:#dadbe0; font-size:12px; } input,textarea,select { width:100%; color:var(--ink); background:#101216; border:1px solid #373c46; border-radius:10px; padding:11px 12px; font:inherit; outline:none; } textarea { min-height:84px; resize:vertical; } input:focus,textarea:focus,select:focus { border-color:#9bd455; box-shadow:0 0 0 3px #b8f36b18; }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }.actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:13px; } button { min-height:42px; padding:9px 14px; border:0; border-radius:10px; color:var(--ink); background:#2c3038; font:650 13px Segoe UI,Arial,sans-serif; cursor:pointer; } button:hover { filter:brightness(1.12); } button:disabled { cursor:wait; opacity:.55; } button.primary { color:#11170b; background:var(--accent); } button.approve { color:#181308; background:var(--orange); } button.danger { color:#ffd3c8; background:#512e2a; } button.success { color:#10180a; background:#b8f36b; }
+    .hint { color:var(--muted); font-size:12px; margin-top:9px; }.warn { color:#e7c98d; }.status { padding:14px; border:1px solid var(--line); border-radius:12px; color:#e7e8eb; background:#101216; min-height:54px; white-space:pre-line; }.status.good { color:#d8f4bd; border-color:#445e31; }.status.error { color:#ffd1c4; border-color:#74443b; }
+    .steps { display:grid; grid-template-columns:repeat(8,1fr); gap:6px; margin:14px 0 9px; }.step { text-align:center; color:#777d88; font-size:10px; padding:8px 2px; border-bottom:3px solid #30343d; }.step.active { color:var(--accent); border-color:var(--accent); }.step.done { color:#b8c49f; border-color:#70884f; }
+    .progress-track { height:7px; overflow:hidden; border-radius:7px; background:#2a2d35; margin-top:12px; }.progress-fill { width:0; height:100%; border-radius:7px; background:linear-gradient(90deg,#8cc747,#d5ff89); transition:width .4s ease; }.scene { margin:10px 0; padding:13px; border:1px solid #353943; border-radius:12px; background:#111319; }.scene-head { color:var(--accent); font-size:11px; font-weight:800; }.scene textarea { min-height:60px; }.scene .spoken { min-height:78px; }
+    #previewWrap video { display:block; width:min(100%,390px); max-height:70vh; margin:12px auto 0; background:#000; border-radius:14px; }.link { color:var(--accent); overflow-wrap:anywhere; }.hidden { display:none!important; }
+    .beats { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:14px; }
+    .beat { display:flex; flex-direction:column; border:1px solid #353943; border-radius:12px; overflow:hidden; background:#111319; }
+    .beat.flagged { border-color:#74443b; }
+    .beat .thumb { width:100%; aspect-ratio:9/16; object-fit:cover; background:#000; }
+    .beat .noimg { width:100%; aspect-ratio:9/16; display:grid; place-items:center; text-align:center; padding:14px; color:#ffd1c4; background:#1a1210; font-size:13px; }
+    .beat .body { padding:11px 12px; display:flex; flex-direction:column; gap:6px; }
+    .beat .bhead { display:flex; justify-content:space-between; font-size:11px; font-weight:800; color:var(--accent); letter-spacing:.04em; }
+    .beat .phrase { font-size:13px; color:var(--ink); line-height:1.35; }
+    .beat .meta { font-size:11.5px; color:var(--muted); }.beat .meta a { color:var(--accent); overflow-wrap:anywhere; }
+    .beat .lic { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; color:#10180a; background:var(--accent); }
+    .beat .lic.unver { background:#ffd17c; }.beat .obl { color:var(--orange); font-size:11px; }
+    .beat .ctl { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+    .beat .ctl input[type=text] { flex:1; min-width:90px; padding:6px 8px; font-size:12px; }
+    .beat .ctl button { min-height:34px; padding:6px 10px; font-size:12px; }
+    .beat .ctl label.file { min-height:34px; padding:6px 10px; font-size:12px; background:#2c3038; border-radius:10px; cursor:pointer; display:inline-flex; align-items:center; }
+    .beat .ctl label.file input { display:none; }
+    @media(max-width:760px) { main { padding:18px 12px 46px; }.grid { grid-template-columns:1fr; }.wide { grid-column:auto; }.row { grid-template-columns:1fr; } header { align-items:flex-start; flex-direction:column; }.steps { grid-template-columns:repeat(4,1fr); }.panel { padding:16px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand"><div class="mark">S</div><div><h1>Shorts Studio</h1><div class="sub">Your daily idea, reviewed before it goes anywhere</div></div></div>
+    <div class="badge" id="connection">Connecting…</div>
+  </header>
+  <section class="grid">
+    <div class="panel wide">
+      <div class="pill">01 · Weekly direction</div><h2>Tell Claude which shows to draw ideas from</h2>
+      <label for="showList">Anime, shows, themes, or angles you want in rotation</label>
+      <textarea id="showList" placeholder="Attack on Titan&#10;Arcane&#10;Breaking Bad&#10;Character psychology, plot twists, hidden details…"></textarea>
+      <div class="row">
+        <div><label><input id="autoDaily" type="checkbox" style="width:auto;margin-right:8px">Generate one idea daily</label></div>
+        <div><label for="dailyTime">Your local draft time</label><input id="dailyTime" type="time" value="09:00"></div>
+      </div>
+      <div class="actions"><button id="savePrefs">Save weekly preferences</button><button class="primary" id="generate">Generate an idea now</button></div>
+      <div class="hint">Each draft uses one Claude Code request. Daily drafts wait for your review and never upload automatically. If the laptop is off at the chosen time, it generates that day's idea the next time the app starts.</div>
+    </div>
+
+    <div class="panel">
+      <div class="pill">02 · Review the idea</div><h2>Shape the script before building</h2>
+      <label for="topic">Topic</label><input id="topic">
+      <label for="angle">Angle</label><textarea id="angle" style="min-height:68px"></textarea>
+      <label for="hook">Opening hook</label><textarea id="hook" style="min-height:68px"></textarea>
+      <label for="script">Spoken script</label><textarea id="script" style="min-height:190px"></textarea>
+      <label for="loopLine">Replay loop ending</label><textarea id="loopLine" style="min-height:60px"></textarea>
+      <div class="actions"><button id="save">Save edits</button><button class="danger" id="reject">Reject this idea</button></div>
+      <label for="revision">Ask Claude for a revision (one more request)</label><textarea id="revision" style="min-height:62px" placeholder="Make the hook punchier and connect the final line back to the opening."></textarea>
+      <div class="actions"><button id="revise">Revise with Claude</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="pill">03 · Video details</div><h2>Title, sources and upload settings</h2>
+      <label for="title">YouTube title</label><input id="title" maxlength="100">
+      <label for="description">Description</label><textarea id="description" style="min-height:105px"></textarea>
+      <label for="tags">Tags</label><input id="tags">
+      <div id="sources" class="hint">Sources used for factual claims appear here.</div>
+      <div class="row">
+        <div><label for="privacy">Visibility after preview approval</label><select id="privacy"><option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option></select></div>
+        <div><label for="kids">Made for kids?</label><select id="kids"><option value="">Choose one…</option><option value="no">No</option><option value="yes">Yes</option></select></div>
+      </div>
+    </div>
+
+    <div class="panel wide">
+      <div class="pill">04 · Scene notes</div><h2>Script beats and angle notes</h2>
+      <div id="scenes"><div class="hint">Scene notes will appear when an idea is ready.</div></div>
+      <div class="hint">These notes help shape the script. The still images themselves are chosen after you approve the script: the agent generates ElevenLabs narration, divides it into 10–15 timed beats, and finds one licensed image per beat, which you review in the next step before any video is built.</div>
+    </div>
+
+    <div class="panel wide">
+      <div class="pill">05 · Approve script &amp; find stills</div><h2>Generate narration, then match licensed stills to the speech</h2>
+      <div class="actions"><button class="approve" id="approve">Approve script &amp; find stills</button><button class="danger hidden" id="cancel">Cancel current build</button></div>
+      <div class="hint">This generates the narration and its word timing, divides it into beats, and finds a licensed still for each. Nothing is rendered or uploaded yet — you review the stills first.</div>
+    </div>
+
+    <div class="panel wide hidden" id="reviewPanel">
+      <div class="pill">06 · Review stills</div><h2 id="reviewHeading">Review the still for each narration beat</h2>
+      <div id="reviewNote" class="hint"></div>
+      <div id="beats" class="beats"></div>
+      <div class="actions"><button class="approve" id="approveStills">Approve stills &amp; build preview</button><button class="danger" id="discard">Discard build</button></div>
+      <div class="hint">Each image appears only while its phrase is spoken. Replace a still with your own licensed image, retry the search for a single beat, or remove a beat. Every beat needs an image before you can build. Source and license are shown under each still; provenance is saved in <code>media_manifest.json</code>. Nothing here guarantees the video is copyright-safe.</div>
+    </div>
+
+    <div class="panel wide">
+      <div class="pill">07 · Preview &amp; upload</div><h2>Inspect the finished short, then upload</h2>
+      <div id="previewWrap" class="hidden"><video id="preview" controls playsinline></video><div class="actions" style="justify-content:center"><button class="success" id="upload">Upload reviewed short</button></div></div>
+      <div class="hint" id="previewHint">The preview appears here after you approve the stills. The video is not uploaded until you review the preview and press Upload.</div>
+    </div>
+
+    <div class="panel wide">
+      <div class="pill">Activity · live progress</div>
+      <div class="steps" id="steps"><div class="step" data-stage="drafting">Idea &amp; script</div><div class="step" data-stage="aligning">Narration</div><div class="step" data-stage="assets">Find stills</div><div class="step" data-stage="review_stills">Review stills</div><div class="step" data-stage="rendering">Render</div><div class="step" data-stage="ready_to_upload">Preview</div><div class="step" data-stage="uploading">Upload</div><div class="step" data-stage="uploaded">Done</div></div>
+      <div class="status" id="status" aria-live="polite">Ready. Save your show list to schedule a daily idea.</div>
+      <div class="progress-track"><div id="progress" class="progress-fill"></div></div>
+      <div class="hint" id="timing">Estimated times are rough and vary with Claude response time, rendering speed, and your upload connection.</div>
+      <div id="resultLink" class="hint"></div>
+    </div>
+  </section>
+</main>
+<script>
+let draft=null, pollTimer=null, lastStage="", lastDraftStatusUpdate=null;
+const $=(id)=>document.getElementById(id);
+const pendingStages=["queued","drafting","aligning","assets","rendering","uploading","cancelling"];
+function setStatus(message,kind=""){const box=$("status");box.className="status "+kind;box.textContent=message;}
+function readDraft(){if(!draft)return null;return {...draft,topic:$("topic").value,angle:$("angle").value,hook:$("hook").value,script:$("script").value,loop_line:$("loopLine").value,title:$("title").value,description:$("description").value,tags:$("tags").value.split(",").map(x=>x.trim()).filter(Boolean),scenes:[...document.querySelectorAll(".scene")].map((n,i)=>({caption:n.querySelector(".caption").value,visual_notes:n.querySelector(".visual").value,visual_query:n.querySelector(".query").value,image_path:draft.scenes[i]?.image_path||""}))};}
+function renderDraft(d){draft=d;$("topic").value=d.topic||"";$("angle").value=d.angle||"";$("hook").value=d.hook||"";$("script").value=d.script||"";$("loopLine").value=d.loop_line||"";$("title").value=d.title||"";$("description").value=d.description||"";$("tags").value=(d.tags||[]).join(", ");$("sources").textContent=(d.sources||[]).length?"Sources/notes: "+d.sources.join(" · "):"No sources supplied; verify factual claims before building.";const box=$("scenes");box.replaceChildren();(d.scenes||[]).forEach((s,i)=>{const c=document.createElement("div");c.className="scene";const h=document.createElement("div");h.className="scene-head";h.textContent=`Scene ${i+1} · subtitle beat`;c.append(h);for(const [label,cls,val] of [["Short on-screen emphasis","caption",s.caption],["Visual search idea","query",s.visual_query],["Image/art direction","visual",s.visual_notes]]){const l=document.createElement("label");l.textContent=label;c.append(l);const t=document.createElement("textarea");t.className=cls;t.value=val||"";c.append(t);}box.append(c);});}
+function disableDraftActions(v,allowReject=false){["generate","savePrefs","save","revise","approve"].forEach(id=>$(id).disabled=v);$("reject").disabled=v&&!allowReject;}
+async function post(path,body={}){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw new Error(data.error||"Request failed");return data;}
+async function savePreferences(){await post("/api/preferences",{show_list:$("showList").value,daily_time:$("dailyTime").value||"09:00",auto_daily:$("autoDaily").checked});}
+$("savePrefs").onclick=async()=>{try{await savePreferences();setStatus("Weekly show list and daily schedule saved.","good");}catch(e){setStatus(e.message,"error");}};
+$("generate").onclick=async()=>{try{await savePreferences();disableDraftActions(true);await post("/api/daily");setStatus("Claude is choosing one topic from your show list and writing the hook, script and loop ending…");}catch(e){setStatus(e.message,"error");disableDraftActions(false);}};
+$("save").onclick=async()=>{try{const d=readDraft();if(!d)throw new Error("Generate today's idea first.");await post("/api/save",{draft:d});renderDraft(d);setStatus("Edits saved locally.","good");}catch(e){setStatus(e.message,"error");}};
+$("revise").onclick=async()=>{try{const d=readDraft(),notes=$("revision").value.trim();if(!d||!notes)throw new Error("Load a draft and enter the change you want.");disableDraftActions(true);await post("/api/revise",{draft:d,notes});}catch(e){setStatus(e.message,"error");disableDraftActions(false);}};
+$("reject").onclick=async()=>{try{await post("/api/reject");draft=null;setStatus("Idea rejected. The next daily idea will be generated at the scheduled time.");}catch(e){setStatus(e.message,"error");}};
+$("approve").onclick=async()=>{try{const d=readDraft();if(!d)throw new Error("Generate a draft first.");if(!confirm("Approve this script? The agent will generate narration and find a licensed still for each beat. Nothing is rendered or uploaded yet."))return;disableDraftActions(true);await post("/api/approve",{draft:d});setStatus("Script approved. Generating narration, then matching licensed stills to the speech…");}catch(e){setStatus(e.message,"error");disableDraftActions(false);}};
+$("cancel").onclick=async()=>{try{$("cancel").disabled=true;await post("/api/cancel");setStatus("Cancellation requested; stopping the active build step…");}catch(e){setStatus(e.message,"error");$("cancel").disabled=false;}};
+$("approveStills").onclick=async()=>{try{if(!confirm("Approve these stills and build the video preview? Nothing will be uploaded yet."))return;$("approveStills").disabled=true;await post("/api/approve-stills");setStatus("Stills approved. Encoding the preview…");}catch(e){setStatus(e.message,"error");$("approveStills").disabled=false;}};
+$("discard").onclick=async()=>{try{if(!confirm("Discard this build and its stills? You can edit the script and rebuild."))return;await post("/api/cancel");}catch(e){setStatus(e.message,"error");}};
+$("upload").onclick=async()=>{try{if(!confirm(`Upload this reviewed Short as ${$("privacy").value}?`))return;$("upload").disabled=true;await post("/api/upload",{privacy:$("privacy").value,made_for_kids:$("kids").value});setStatus("Preview approved. Uploading video and metadata to YouTube…");}catch(e){setStatus(e.message,"error");$("upload").disabled=false;}};
+let beatsLoadedFor=null, beatBusy=false;
+function fmt(t){t=Math.max(0,Math.round(t||0));return `${Math.floor(t/60)}:${String(t%60).padStart(2,"0")}`;}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+async function beatAction(path,body){if(beatBusy)return;beatBusy=true;try{const r=await post(path,body);if(r.plan)renderBeats(r.plan,true);}catch(e){setStatus(e.message,"error");}finally{beatBusy=false;}}
+function renderBeats(plan,editable){const panel=$("reviewPanel"),box=$("beats");if(!plan||!(plan.beats||[]).length){panel.classList.add("hidden");return;}
+  $("reviewHeading").textContent=editable?`Review the ${plan.beats.length} stills — one per narration beat`:`Stills used in this preview (${plan.beats.length})`;
+  $("reviewNote").innerHTML=`Timing source: <b>${esc(plan.timing_source||"unknown")}</b>. Each still shows only while its phrase is spoken.`+(plan.timing_source==="estimated"?' <span class="obl">Timings are estimated (no ElevenLabs alignment available).</span>':"");
+  $("approveStills").classList.toggle("hidden",!editable);$("discard").classList.toggle("hidden",!editable);
+  box.replaceChildren();
+  plan.beats.forEach(b=>{const src=b.source||{};const has=!!b.image_path;const card=document.createElement("div");card.className="beat"+(has?"":" flagged");
+    const head=`<div class="bhead"><span>BEAT ${b.beat}</span><span>${fmt(b.start)}–${fmt(b.end)}</span></div>`;
+    let media;
+    if(has){media=`<img class="thumb" loading="lazy" alt="Beat ${b.beat}" src="/api/beat-image?beat=${b.beat}&ts=${esc(plan.generated_at||"")}${Date.now()}">`;}
+    else{media=`<div class="noimg"><div><b>No licensed image</b><br>${esc(b.failure_reason||"Flagged for review.")}</div></div>`;}
+    const lines=[`<div class="phrase">${esc(b.text)}</div>`];
+    if(b.image_query)lines.push(`<div class="meta">Wants: <b>${esc(b.image_query)}</b></div>`);
+    if(has){const ver=src.license_verified?"lic":"lic unver";const licname=esc(src.license_name||"license");const lic=src.license_url?`<a href="${esc(src.license_url)}" target="_blank" rel="noopener">${licname}</a>`:licname;
+      lines.push(`<div class="meta"><span class="${ver}">${src.license_verified?"✓ ":"⚠ "}${licname}</span></div>`);
+      lines.push(`<div class="meta">${esc(src.provider||"")}${src.creator?" · "+esc(src.creator):""} · License: ${lic}${src.source_page_url?` · <a href="${esc(src.source_page_url)}" target="_blank" rel="noopener">source</a>`:""}</div>`);
+      if((src.license_obligations||[]).length)lines.push(`<div class="obl">${esc(src.license_obligations.join("; "))}</div>`);
+    }
+    let ctl="";
+    if(editable){ctl=`<div class="ctl"><input type="text" value="${esc(b.image_query||b.search_query||"")}" placeholder="what to show" data-q="${b.beat}"><button data-retry="${b.beat}">Retry</button><label class="file">Replace<input type="file" accept="image/jpeg,image/png,image/webp" data-replace="${b.beat}"></label><button class="danger" data-remove="${b.beat}">Remove</button></div>`;}
+    card.innerHTML=head+media+`<div class="body">${lines.join("")}${ctl}</div>`;box.append(card);});
+  if(editable){
+    box.querySelectorAll("[data-retry]").forEach(btn=>btn.onclick=()=>{const n=+btn.dataset.retry;const q=box.querySelector(`input[data-q="${n}"]`).value.trim();setStatus(`Searching a new image for beat ${n}…`);beatAction("/api/beat/retry",{beat:n,query:q});});
+    box.querySelectorAll("[data-remove]").forEach(btn=>btn.onclick=()=>{const n=+btn.dataset.remove;if(confirm(`Remove beat ${n}? Its narration will play under the neighbouring image.`))beatAction("/api/beat/remove",{beat:n});});
+    box.querySelectorAll("[data-replace]").forEach(inp=>inp.onchange=()=>{const n=+inp.dataset.replace;const f=inp.files[0];if(!f)return;if(f.size>35e6){setStatus("Image is too large (max ~35 MB).","error");return;}const rd=new FileReader();rd.onload=()=>{setStatus(`Uploading your image for beat ${n}…`);beatAction("/api/beat/replace",{beat:n,filename:f.name,data:rd.result});};rd.readAsDataURL(f);});
+  }
+  panel.classList.remove("hidden");}
+async function loadBeats(editable){try{const r=await fetch("/api/beats",{cache:"no-store"}).then(x=>x.json());renderBeats(r.plan,editable);}catch(e){}}
+function timingText(s){const elapsed=s.elapsed_seconds||0;let text=elapsed<60?`Elapsed ${elapsed}s`:`Elapsed ${Math.floor(elapsed/60)}m ${elapsed%60}s`;if(typeof s.eta_max_seconds==="number"&&pendingStages.includes(s.stage)){const lo=Math.max(0,s.eta_min_seconds||0),hi=Math.max(lo,s.eta_max_seconds||0);text+=hi===0?" · taking longer than the rough estimate; the current step is still active":` · rough remaining estimate ${lo===hi?lo+"s":lo+"–"+hi+"s"}`;}return text+" · estimates vary.";}
+function updateSteps(stage,uploadPct){const steps=[...document.querySelectorAll(".step")];const order=["drafting","aligning","assets","review_stills","rendering","ready_to_upload","uploading","uploaded"];const at=order.indexOf(stage);steps.forEach((el,i)=>{el.classList.toggle("done",at>i);el.classList.toggle("active",at===i||(stage==="queued"&&i===1)||(stage==="cancelling"&&i===4));});const pct={idle:0,draft:0,drafting:8,queued:12,aligning:22,assets:38,review_stills:55,rendering:72,ready_to_upload:84,uploading:92,uploaded:100,failed:0,cancelled:0,cancelling:60,rejected:0};$("progress").style.width=(stage==="uploading"&&typeof uploadPct==="number"?(92+8*uploadPct/100):pct[stage]??0)+"%";}
+async function refreshStatus(){try{const r=await fetch("/api/status",{cache:"no-store"}).then(x=>x.json()),s=r.status||{};$("connection").textContent=`Claude ${r.claude_found?"ready":"not found"} · YouTube ${r.authorized?"connected":"not connected"} · Voice ${r.elevenlabs_configured?"ElevenLabs":"Windows"} · Visuals agent-supplied`;if(s.message){if(s.stage==="draft"&&s.updated_at!==lastDraftStatusUpdate){const d=await fetch("/api/draft",{cache:"no-store"}).then(x=>x.json());if(d.draft)renderDraft(d.draft);lastDraftStatusUpdate=s.updated_at;}setStatus(s.message,s.stage==="failed"?"error":(["uploaded","ready_to_upload","draft"].includes(s.stage)?"good":""));$("timing").textContent=timingText(s);updateSteps(s.stage,s.progress_percent);const active=pendingStages.includes(s.stage),frozen=["review_stills","ready_to_upload","uploading","uploaded"].includes(s.stage);$("cancel").classList.toggle("hidden",!active);$("cancel").disabled=s.stage==="cancelling";disableDraftActions(active||frozen,frozen);$("approve").disabled=active||frozen;
+if(s.stage==="review_stills"){if(beatsLoadedFor!==s.updated_at&&!beatBusy){beatsLoadedFor=s.updated_at;$("approveStills").disabled=false;loadBeats(true);}}
+else if(s.stage==="ready_to_upload"||s.stage==="uploading"){if(beatsLoadedFor!=="ro:"+s.updated_at){beatsLoadedFor="ro:"+s.updated_at;loadBeats(false);}}
+else{$("reviewPanel").classList.add("hidden");beatsLoadedFor=null;}
+if(s.stage==="ready_to_upload"&&s.file){$("previewWrap").classList.remove("hidden");const v=$("preview");if(lastStage!==s.stage){v.src="/api/preview?ts="+Date.now();$("upload").disabled=false;}}if(s.stage!=="ready_to_upload"&&s.stage!=="uploading"){$("previewWrap").classList.add("hidden");}if(s.video_url){$("resultLink").innerHTML=`Uploaded: <a class="link" href="${s.video_url}" target="_blank" rel="noopener">${s.video_url}</a> (${s.privacy||"private"})`;}else if(s.stage==="ready_to_upload"){$("resultLink").textContent="Preview is ready. Watch it above before choosing Upload.";}if(s.stage==="failed"){$("cancel").classList.add("hidden");disableDraftActions(false);$("approve").disabled=false;}if(s.stage==="cancelled"||s.stage==="draft"||s.stage==="rejected"){disableDraftActions(false);$("approve").disabled=false;}lastStage=s.stage;} }catch(e){}finally{clearTimeout(pollTimer);pollTimer=setTimeout(refreshStatus,2500);}}
+async function initialize(){try{await fetch("/api/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})}catch(e){}try{const st=await fetch("/api/status").then(x=>x.json());const p=st.preferences||{};$("showList").value=p.show_list||"";$("dailyTime").value=p.daily_time||"09:00";$("autoDaily").checked=p.auto_daily!==false;}catch(e){}refreshStatus();}
+initialize();
+</script>
+</body>
+</html>

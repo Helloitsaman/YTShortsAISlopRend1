@@ -1,0 +1,26 @@
+# Secrets and environment configs
+secrets.env
+*.secret.env
+.env
+*.env
+
+# Local Google OAuth credentials and tokens
+work/client_secret*.json
+work/oauth_client*.json
+work/token*.json
+client_secret*.json
+token*.json
+
+# Work directory (runtime data, drafts, cache, renders, media)
+work/
+outputs/
+
+# Python environment and caches
+.venv/
+__pycache__/
+*.py[cod]
+
+# IDE and tool states
+.claude/
+.DS_Store
+Thumbs.db
