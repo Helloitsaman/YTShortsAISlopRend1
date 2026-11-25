@@ -108,14 +108,16 @@ def words_from_characters(characters: list[str], starts: list[float], ends: list
 # --------------------------------------------------------------------------- #
 def elevenlabs_tts_with_timestamps(script: str, mp3_path: Path) -> list[dict]:
     api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
-    voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb").strip()
+    # Sarah is an ElevenLabs built-in/default female voice, which is API-usable
+    # on eligible free accounts. Keep an environment override for account voices.
+    voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL").strip()
     model_id = os.environ.get("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2").strip()
     url = (f"https://api.elevenlabs.io/v1/text-to-speech/{urllib.parse.quote(voice_id)}"
            "/with-timestamps?output_format=mp3_44100_128")
     payload = json.dumps({
         "text": script, "model_id": model_id,
-        "voice_settings": {"stability": 0.42, "similarity_boost": 0.78, "style": 0.25,
-                           "use_speaker_boost": True},
+        "voice_settings": {"stability": 0.30, "similarity_boost": 0.78, "style": 0.55,
+                           "speed": 1.08, "use_speaker_boost": True},
     }).encode("utf-8")
     request = urllib.request.Request(url, data=payload, method="POST", headers={
         "xi-api-key": api_key, "Content-Type": "application/json", "Accept": "application/json"})
@@ -178,6 +180,15 @@ def synthesize(script: str, assets_dir: Path) -> dict:
     timing_source = "estimated"
 
     if api_key:
+        # ElevenLabs API keys start with "sk_". A 32/64-char hex value is the key
+        # *ID* from the dashboard list, which cannot authenticate — catch that
+        # early with an actionable message instead of a raw 401 from the API.
+        if not api_key.startswith("sk_"):
+            raise RuntimeError(
+                "ELEVENLABS_API_KEY looks like a key ID, not an API key. ElevenLabs API keys start with "
+                "'sk_' and are shown only when you create or rotate a key (ElevenLabs dashboard → Developers "
+                "→ API Keys → Create/rotate, then copy the 'sk_...' value). Put that value in secrets.env and "
+                "restart the app.")
         log("[1/2] Requesting ElevenLabs narration with word timing…")
         try:
             words = elevenlabs_tts_with_timestamps(script, mp3_path)

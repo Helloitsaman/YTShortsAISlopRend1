@@ -247,10 +247,15 @@ ANGLE_WORDS = {
 def subject_phrase(topic: str, title: str) -> str:
     """The show / anime / topic name used to anchor every image search.
 
-    Takes the part of the topic before the first separator (": - — |"), which is
-    almost always the show or subject, and trims leading angle words."""
+    Keeps short franchise labels split by a colon (for example "Cyberpunk:
+    Edgerunners") while discarding explanatory text after the show name."""
     base = str(topic or "").strip() or str(title or "").strip()
-    base = re.split(r"[:—–\-\|]", base, 1)[0].strip()
+    pieces = re.split(r"[:—–\-\|]", base, 1)
+    base = pieces[0].strip()
+    if len(pieces) > 1 and len(base.split()) <= 2:
+        continuation = pieces[1].strip().split()
+        if continuation and re.sub(r"[^A-Za-z']", "", continuation[0]).lower() not in ANGLE_WORDS:
+            base = f"{base} {continuation[0]}"
     words = [w for w in base.split() if w]
     while words and re.sub(r"[^A-Za-z']", "", words[0]).lower() in ANGLE_WORDS:
         words.pop(0)
@@ -320,17 +325,17 @@ def claude_visual_beats(draft: dict, script: str) -> tuple[list[str], list[str]]
 
 
 def beat_query_variants(image_query: str, subject: str) -> list[str]:
-    """Search queries for a Claude-specified image requirement: the requirement
-    itself first (it already names the subject), then show-anchored and keyword
-    fallbacks so the beat can still be filled from a licensed library."""
+    """Anchor every image query in the series name before trying broad fallbacks."""
     query = (image_query or "").strip()
     variants: list[str] = []
     if query:
-        variants.append(query)
-        if subject and subject.lower() not in query.lower():
-            variants.append(f"{subject} {query}")
+        variants.append(f"{subject} {query}".strip() if subject else query)
+        if subject:
+            variants.append(subject)
         keywords = content_keywords(query, 3)
-        if keywords:
+        if keywords and subject:
+            variants.append(f"{subject} {' '.join(keywords[:2])}")
+        elif keywords:
             variants.append(" ".join(keywords[:3]))
     if subject:
         variants.append(subject)

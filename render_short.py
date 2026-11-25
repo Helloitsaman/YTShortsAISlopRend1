@@ -1,6 +1,5 @@
-"""Build a portrait Short from a reviewed beat plan: licensed stills, hard cuts
-at the beat timestamps, large phone-safe subtitles, and the pre-generated
-ElevenLabs narration. No motion, zoom, pan, or crossfades."""
+"""Build a portrait Short from reviewed stills, reference-style captions,
+the creator handle, and pre-generated narration. No motion or transitions."""
 
 from __future__ import annotations
 
@@ -13,20 +12,22 @@ import wave
 from pathlib import Path
 
 import imageio_ffmpeg
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 
 ROOT = Path(__file__).resolve().parent
 WIDTH, HEIGHT = 1080, 1920
-SAFE_TOP, SAFE_BOTTOM = 190, 300
+CHANNEL_HANDLE = "@nicheanimeshorts"
 MUSIC_DIR = ROOT / "work" / "media" / "music"
 SFX_DIR = ROOT / "work" / "media" / "sfx"
-PALETTE = ["#B8F36B", "#79C8FF", "#FF9A73", "#C5A7FF", "#F3D66B"]
+SUBTITLE_WHITE = "#FFFFFF"
+SUBTITLE_RED = "#FF3156"
 
 
 def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     candidates = [
-        Path("C:/Windows/Fonts/seguisb.ttf" if bold else "C:/Windows/Fonts/segoeui.ttf"),
+        Path("C:/Windows/Fonts/impact.ttf") if bold else Path("C:/Windows/Fonts/segoeui.ttf"),
+        Path("C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/segoeui.ttf"),
         Path("C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/arial.ttf"),
     ]
     for candidate in candidates:
@@ -52,9 +53,49 @@ def wrap_text(draw: ImageDraw.ImageDraw, text: str, face: ImageFont.ImageFont, m
     return lines or [""]
 
 
-def stable_accent(text: str, index: int) -> str:
-    digest = hashlib.sha256(f"{text}:{index}".encode("utf-8")).digest()
-    return PALETTE[digest[0] % len(PALETTE)]
+EMPHASIS_SKIP = {
+    "THE", "AND", "FOR", "WITH", "FROM", "THAT", "THIS", "WERE", "WAS", "ARE",
+    "HAVE", "HAS", "HAD", "HIS", "HER", "ITS", "BUT", "NOT", "JUST", "THEN",
+    "WHEN", "WHAT", "WHY", "HOW", "WHO", "YOUR", "THEIR", "INTO", "OVER",
+}
+
+
+def emphasized_word(text: str) -> str:
+    words = re.findall(r"[A-Za-z0-9']+", text.upper())
+    meaningful = [word for word in words if len(word) > 2 and word not in EMPHASIS_SKIP]
+    return meaningful[-1] if meaningful else (words[-1] if words else "")
+
+
+def draw_centered_subtitle(draw: ImageDraw.ImageDraw, text: str) -> None:
+    display = " ".join(text.upper().split())
+    size = 82
+    face = font(size, True)
+    lines = wrap_text(draw, display, face, WIDTH - 140)
+    while len(lines) > 2 and size > 54:
+        size -= 4
+        face = font(size, True)
+        lines = wrap_text(draw, display, face, WIDTH - 140)
+    line_height = int(size * 1.22)
+    block_height = len(lines) * line_height
+    # Anchor the caption block in the lower fifth. The creator handle sits
+    # directly below it while remaining above the Shorts bottom controls.
+    y = int(HEIGHT * 0.80 - block_height)
+    emphasis = emphasized_word(display)
+    emphasized = False
+    stroke_width = max(5, size // 10)
+    for line in lines:
+        tokens = line.split()
+        widths = [draw.textbbox((0, 0), word, font=face, stroke_width=stroke_width)[2] for word in tokens]
+        space = draw.textbbox((0, 0), " ", font=face, stroke_width=stroke_width)[2]
+        x = (WIDTH - (sum(widths) + space * max(0, len(tokens) - 1))) / 2
+        for word, word_width in zip(tokens, widths):
+            color = SUBTITLE_RED if word == emphasis and not emphasized else SUBTITLE_WHITE
+            draw.text((int(x), y), word, font=face, fill=color,
+                      stroke_width=stroke_width, stroke_fill="#000000")
+            if color == SUBTITLE_RED:
+                emphasized = True
+            x += word_width + space
+        y += line_height
 
 
 def choose_music(topic: str) -> Path | None:
@@ -86,43 +127,23 @@ def resolve_path(value: str) -> Path:
     return candidate.resolve()
 
 
-def build_beat_frame(image_path: Path, topic: str, beat_text: str, index: int, total: int, output: Path) -> None:
-    accent = stable_accent(topic, index)
+def build_beat_frame(image_path: Path, beat_text: str, output: Path) -> None:
     with Image.open(image_path) as raw:
         if getattr(raw, "is_animated", False):
             raw.seek(0)
         background = ImageOps.fit(raw.convert("RGB"), (WIDTH, HEIGHT), method=Image.Resampling.LANCZOS)
-    background = ImageEnhance.Brightness(background).enhance(.57)
-    background = background.filter(ImageFilter.GaussianBlur(1.2))
-    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (5, 8, 15, 88))
-    mask = Image.new("L", (1, HEIGHT))
-    mask.putdata([int(85 + 130 * (i / HEIGHT) ** 2) for i in range(HEIGHT)])
-    vertical = Image.new("RGBA", (WIDTH, HEIGHT), (5, 8, 15, 0))
-    vertical.putalpha(mask.resize((WIDTH, HEIGHT)))
-    frame = Image.alpha_composite(background.convert("RGBA"), overlay)
-    frame = Image.alpha_composite(frame, vertical)
+    frame = background.convert("RGBA")
     draw = ImageDraw.Draw(frame)
 
-    draw.rounded_rectangle((52, SAFE_TOP, WIDTH - 52, SAFE_TOP + 82), radius=38, fill=(14, 17, 25, 185), outline=(255, 255, 255, 35), width=2)
-    draw.ellipse((82, SAFE_TOP + 31, 105, SAFE_TOP + 54), fill=accent)
-    draw.text((128, SAFE_TOP + 25), "STORY BREAKDOWN", font=font(27, True), fill="#F5F4F1")
-    draw.text((WIDTH - 170, SAFE_TOP + 26), f"{index + 1:02d}/{total:02d}", font=font(25, True), fill=accent)
-
-    # Large, bold, high-contrast subtitle for the exact phrase spoken in this beat.
-    lines = wrap_text(draw, beat_text, font(58, True), WIDTH - 170)
-    if len(lines) > 5:
-        lines = lines[:4] + [" ".join(lines[4:])]
-    line_height = 78
-    block_height = len(lines) * line_height + 86
-    top = min(HEIGHT - SAFE_BOTTOM - block_height, max(HEIGHT * .54, HEIGHT * .73 - block_height / 2))
-    draw.rounded_rectangle((48, int(top) - 34, WIDTH - 48, int(top + block_height)), radius=38,
-                           fill=(7, 9, 14, 202), outline=(255, 255, 255, 55), width=2)
-    draw.rounded_rectangle((80, int(top) - 4, 96, int(top) + 46), radius=8, fill=accent)
-    text_y = int(top)
-    for line in lines:
-        draw.text((125, text_y), line, font=font(58, True), fill="#FFFFFF",
-                  stroke_width=3, stroke_fill=(0, 0, 0, 230))
-        text_y += line_height
+    # Reference style: only the original still, centered uppercase captions,
+    # one red emphasis word, and the creator's small handle at the bottom.
+    draw_centered_subtitle(draw, beat_text)
+    handle_font = font(34, True)
+    handle_box = draw.textbbox((0, 0), CHANNEL_HANDLE, font=handle_font, stroke_width=3)
+    handle_x = (WIDTH - (handle_box[2] - handle_box[0])) // 2
+    handle_y = int(HEIGHT * 0.855)
+    draw.text((handle_x, handle_y), CHANNEL_HANDLE, font=handle_font, fill=SUBTITLE_WHITE,
+              stroke_width=3, stroke_fill="#000000")
     frame.convert("RGB").save(output, format="JPEG", quality=92, optimize=True)
 
 
@@ -172,7 +193,7 @@ def render_from_beats(beats_path: Path, output_path: Path) -> None:
     frames: list[Path] = []
     for i, beat in enumerate(beats):
         frame = assets / f"frame-{i + 1:02d}.jpg"
-        build_beat_frame(images[i], topic, str(beat.get("text", "")), i, len(beats), frame)
+        build_beat_frame(images[i], str(beat.get("text", "")), frame)
         frames.append(frame)
 
     music = choose_music(topic)

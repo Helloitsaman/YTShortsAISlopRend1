@@ -9,7 +9,8 @@ The component's only responsibility is image discovery, license checks, download
 ## Required video style
 
 - Use one still image per scene, with enough variety to keep the short visually relevant.
-- Place large, bold, high-contrast subtitles over the stills. Keep text within mobile-safe areas and away from the Shorts interface overlays.
+- Use centered, uppercase condensed bold subtitles over the stills, with white lettering, a thick black outline, and one key word emphasized in vivid red. Keep text within mobile-safe areas. The renderer adds @nicheanimeshorts at the bottom.
+- Keep the frame visually minimal: only the still image, timed subtitles, and creator handle. Do not add title cards, badges, scene numbers, panels, or decorative graphics.
 - Use ElevenLabs for narration through the existing server-side credential configuration.
 - Use straightforward cuts between still images. Do not add animation, zoom, pan, parallax, animated backgrounds, GIFs, generated graphics, or video clips.
 - Do not build transitions or motion effects into this image-finding component.

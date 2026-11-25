@@ -253,6 +253,11 @@ def ask_claude(prompt: str, current: dict | None = None) -> dict:
             "a final loop_line, title, short description, up to 12 tags, 4-6 scenes, and sources when reliable sources are known. "
             "Make it sound conversational, surprising and specific, not like a recap or generic AI narration. "
             "Do not claim a topic is trending unless the supplied sources substantiate that. Do not invent sources or facts. "
+            "For anime fan reception, interpretations, debates, and community context, prioritize relevant Reddit discussions. "
+            "Use exact Reddit post permalinks in sources when you actually accessed them, and distinguish fan opinions from canon. "
+            "Verify concrete plot, episode, character, and production facts with reliable primary sources where possible. "
+            "If Reddit or web research tools are unavailable, do not pretend to have searched Reddit or fabricate citations; "
+            "leave unsupported claims out and make that limitation clear in the sources. "
             "Avoid dialogue and lyrics. The spoken script must start with the exact hook and end with the exact loop_line. "
             "The loop_line closes the argument and makes the final words flow naturally into the opening hook on replay. "
             "Each scene needs a short on-screen caption and a concise visual_query. "
@@ -274,6 +279,8 @@ def ask_claude(prompt: str, current: dict | None = None) -> dict:
             "Keep visual_beats consistent: their phrases must still concatenate to exactly the (possibly revised) script in order, "
             "stay at 10-15 beats, and each image_query must name the specific subject discussed in its phrase (character + show, place, "
             "object, or concept) for a Creative Commons image search — never a copyrighted screenshot, poster, or logo. "
+            "Prioritize Reddit discussions for fan interpretations when research access is available; include exact post permalinks, "
+            "label opinions as opinions, and verify concrete canon facts with primary sources. Never claim Reddit research that was not done. "
             "Do not invent facts or sources.\nCreator notes: " + prompt.strip() +
             "\nCurrent package:\n" + json.dumps(current, ensure_ascii=False)
         )
