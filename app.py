@@ -214,6 +214,38 @@ def validate_draft(draft: dict) -> None:
         raise ValueError("Draft must contain four to six visual scenes.")
 
 
+def _hashtag(value: str) -> str:
+    words = re.findall(r"[A-Za-z0-9]+", str(value or ""))
+    if not words:
+        return ""
+    tag = "#" + "".join(word[:1].upper() + word[1:] for word in words)
+    if len(tag) > 32 or any(word.casefold() in {"ai", "claude", "openverse", "pexels", "pixabay"} for word in words):
+        return ""
+    return tag
+
+
+def format_description(draft: dict) -> str:
+    """Keep descriptions creator-focused and append a small relevant hashtag set."""
+    description = str(draft.get("description", "")).strip()
+    description = re.sub(
+        r"(?im)^.*(?:AI[- ]generated|generated (?:with|using) AI|made with AI|created with AI|Openverse).*$",
+        "", description,
+    )
+    existing = re.findall(r"#[A-Za-z0-9_]+", description)
+    description = re.sub(r"#[A-Za-z0-9_]+", "", description)
+    description = re.sub(r"[ \t]+\n", "\n", description)
+    description = re.sub(r"\n{3,}", "\n\n", description).strip()
+
+    hashtags = ["#Shorts", "#Anime", "#AnimeShorts"]
+    for value in existing + list(draft.get("tags", []) or []):
+        tag = _hashtag(value)
+        if tag and tag.casefold() not in {item.casefold() for item in hashtags}:
+            hashtags.append(tag)
+        if len(hashtags) >= 8:
+            break
+    return (description + "\n\n" if description else "") + " ".join(hashtags)
+
+
 def normalize_draft(draft: dict) -> dict:
     """Fill fields added by newer versions so an older saved draft remains editable."""
     result = dict(draft)
@@ -238,6 +270,7 @@ def normalize_draft(draft: dict) -> dict:
     result["visual_beats"] = normalized_beats
     result.setdefault("sources", [])
     result.setdefault("tags", [])
+    result["description"] = format_description(result)
     return result
 
 
@@ -251,6 +284,9 @@ def ask_claude(prompt: str, current: dict | None = None) -> dict:
             "Create one original YouTube Shorts package about anime/TV storytelling commentary. "
             "Return topic, analytical angle, a compelling first-line hook, a 90-120 word spoken script, "
             "a final loop_line, title, short description, up to 12 tags, 4-6 scenes, and sources when reliable sources are known. "
+            "Make the description concise and creator-focused; add 5-8 relevant, commonly used hashtags, including #Shorts, #Anime, "
+            "#AnimeShorts, plus show/character/topic-specific tags. Do not claim they are currently trending without live evidence. "
+            "Do not mention AI generation, Claude, Openverse, APIs, or internal production tools in the public description. "
             "Make it sound conversational, surprising and specific, not like a recap or generic AI narration. "
             "Do not claim a topic is trending unless the supplied sources substantiate that. Do not invent sources or facts. "
             "For anime fan reception, interpretations, debates, and community context, prioritize relevant Reddit discussions. "
@@ -264,12 +300,13 @@ def ask_claude(prompt: str, current: dict | None = None) -> dict:
             "Keep captions to 2-7 words, readable on a phone, and do not duplicate the complete spoken script on screen. "
             "Also return visual_beats: an ordered list of 10 to 15 short, consecutive, non-overlapping phrases whose words, "
             "in order, are exactly the spoken script (concatenating the phrases with single spaces reproduces the script word for word, "
-            "including the hook first and the loop_line last). For each beat include image_query: a concrete, specific description of the "
-            "single real image to show while that exact phrase is spoken. When the phrase is about a character, name that character and the "
-            "show (for example 'Mikasa Ackerman Attack on Titan'); for a place, event, object, or concept, name it concretely "
-            "(for example 'Wall Maria ruins' or 'medieval city gate at dusk'). The image is pulled from public-domain and Creative Commons "
-            "libraries, so describe the subject itself and never request a screenshot, poster, logo, or copyrighted frame. Every image_query "
-            "must be specific to its own beat and match what is being said there — never generic filler and never the same query twice. "
+            "including the hook first and the loop_line last). For each beat include image_query: a concrete description of a single still "
+            "image, drawn only from public-domain and Creative Commons libraries, that thematically illustrates what that exact phrase is "
+            "about. Describe a real-world, openly reusable subject — a place, setting, object, mood, or concept (for example 'ruined stone "
+            "city wall overgrown with grass' or 'medieval city gate at dusk'). A topic that names a copyrighted show grants no rights to its "
+            "imagery, so never name a copyrighted character or show and never request a screenshot, poster, logo, promotional art, or frame — "
+            "those are not licensable and only surface mislabeled fan uploads. Every image_query must be specific to its own beat and match "
+            "what is being said there — never generic filler and never the same query twice. "
         )
         prompt_text = task + "\nCreator preferences and show list: " + prompt.strip()
     else:
@@ -277,8 +314,9 @@ def ask_claude(prompt: str, current: dict | None = None) -> dict:
             "Revise this Shorts package from the creator's notes. Return the complete package in the same schema. "
             "Preserve unchanged facts and structure. Keep the strong hook and the replay loop unless the notes ask otherwise. "
             "Keep visual_beats consistent: their phrases must still concatenate to exactly the (possibly revised) script in order, "
-            "stay at 10-15 beats, and each image_query must name the specific subject discussed in its phrase (character + show, place, "
-            "object, or concept) for a Creative Commons image search — never a copyrighted screenshot, poster, or logo. "
+            "stay at 10-15 beats, and each image_query must describe a legally reusable, thematic real-world subject (a place, setting, "
+            "object, mood, or concept) for a public-domain or Creative Commons image search — never a copyrighted character or show name, "
+            "screenshot, poster, logo, or frame. "
             "Prioritize Reddit discussions for fan interpretations when research access is available; include exact post permalinks, "
             "label opinions as opinions, and verify concrete canon facts with primary sources. Never claim Reddit research that was not done. "
             "Do not invent facts or sources.\nCreator notes: " + prompt.strip() +
@@ -299,7 +337,7 @@ def ask_claude(prompt: str, current: dict | None = None) -> dict:
         raise RuntimeError("Claude Code could not generate the draft: " + detail[-1800:])
     draft = extract_json(result.stdout)
     validate_draft(draft)
-    return draft
+    return normalize_draft(draft)
 
 
 def _kill_process_tree(proc: subprocess.Popen[str]) -> None:
@@ -456,12 +494,14 @@ def run_render() -> None:
         if not beats_path.is_file():
             raise ValueError("The approved beat plan is missing. Rebuild from the script.")
         draft = read_json(DRAFT_PATH, {})
+        if isinstance(draft, dict):
+            draft = normalize_draft(draft)
         cancel_event.clear()
 
         set_status("rendering", "Encoding the preview from your approved stills…",
                    file=str(output), eta_min_seconds=35, eta_max_seconds=150)
         render_output = run_step(
-            "rendering", "Building bold subtitles and encoding the video…",
+            "rendering", "Building large, word-synced 4–5-word captions and encoding the video…",
             [sys.executable, "-u", str(ROOT / "render_short.py"), "--beats", str(beats_path), "--output", str(output)],
             900, 35, 150,
         )
@@ -472,6 +512,7 @@ def run_render() -> None:
         attribution_path = assets_dir / "attribution.txt"
         if attribution_path.is_file() and isinstance(draft, dict):
             credits = attribution_path.read_text(encoding="utf-8").strip()
+            credits = re.sub(r"\s*\(via Openverse\)", "", credits, flags=re.IGNORECASE)
             if credits:
                 draft["description"] = (str(draft.get("description", "")).rstrip() + "\n\n" + credits).strip()
                 write_json(DRAFT_PATH, draft)

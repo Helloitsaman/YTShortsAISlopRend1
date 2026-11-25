@@ -18,6 +18,10 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 ROOT = Path(__file__).resolve().parent
 WIDTH, HEIGHT = 1080, 1920
 CHANNEL_HANDLE = "@nicheanimeshorts"
+CAPTION_CENTER_X = WIDTH // 2
+# Keep the text inside the central safe area. The Shorts action rail occupies
+# the right edge; centering within this width leaves that rail unobstructed.
+CAPTION_MAX_WIDTH = 700
 MUSIC_DIR = ROOT / "work" / "media" / "music"
 SFX_DIR = ROOT / "work" / "media" / "sfx"
 SUBTITLE_WHITE = "#FFFFFF"
@@ -66,28 +70,28 @@ def emphasized_word(text: str) -> str:
     return meaningful[-1] if meaningful else (words[-1] if words else "")
 
 
-def draw_centered_subtitle(draw: ImageDraw.ImageDraw, text: str) -> None:
+def draw_centered_subtitle(draw: ImageDraw.ImageDraw, text: str) -> int:
     display = " ".join(text.upper().split())
-    size = 82
+    size = 104
     face = font(size, True)
-    lines = wrap_text(draw, display, face, WIDTH - 140)
-    while len(lines) > 2 and size > 54:
-        size -= 4
+    lines = wrap_text(draw, display, face, CAPTION_MAX_WIDTH)
+    while len(lines) > 2 and size > 64:
+        size -= 6
         face = font(size, True)
-        lines = wrap_text(draw, display, face, WIDTH - 140)
-    line_height = int(size * 1.22)
+        lines = wrap_text(draw, display, face, CAPTION_MAX_WIDTH)
+    line_height = int(size * 1.12)
     block_height = len(lines) * line_height
-    # Anchor the caption block in the lower fifth. The creator handle sits
-    # directly below it while remaining above the Shorts bottom controls.
-    y = int(HEIGHT * 0.80 - block_height)
+    # Center the caption in the video safe area, above the lower creator/title
+    # controls. Its width is capped to stay clear of the right action rail.
+    y = int(HEIGHT * 0.62 - block_height / 2)
     emphasis = emphasized_word(display)
     emphasized = False
-    stroke_width = max(5, size // 10)
+    stroke_width = max(6, size // 10)
     for line in lines:
         tokens = line.split()
         widths = [draw.textbbox((0, 0), word, font=face, stroke_width=stroke_width)[2] for word in tokens]
         space = draw.textbbox((0, 0), " ", font=face, stroke_width=stroke_width)[2]
-        x = (WIDTH - (sum(widths) + space * max(0, len(tokens) - 1))) / 2
+        x = CAPTION_CENTER_X - (sum(widths) + space * max(0, len(tokens) - 1)) / 2
         for word, word_width in zip(tokens, widths):
             color = SUBTITLE_RED if word == emphasis and not emphasized else SUBTITLE_WHITE
             draw.text((int(x), y), word, font=face, fill=color,
@@ -96,6 +100,7 @@ def draw_centered_subtitle(draw: ImageDraw.ImageDraw, text: str) -> None:
                 emphasized = True
             x += word_width + space
         y += line_height
+    return y
 
 
 def choose_music(topic: str) -> Path | None:
@@ -110,9 +115,25 @@ def choose_sound_effect(text: str) -> Path | None:
     if not SFX_DIR.is_dir():
         return None
     files = sorted(p for p in SFX_DIR.glob("*") if p.suffix.lower() in (".mp3", ".wav", ".m4a", ".ogg"))
-    keywords = {w.lower() for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) > 3}
-    matches = [p for p in files if any(word in p.stem.lower() for word in keywords)]
-    return matches[0] if matches else None
+    # Add a brief impact only on an actual story turn, rather than on every
+    # beat. Kenney's CC0 Impact Sounds pack uses names containing "impact".
+    words = set(re.findall(r"[a-z0-9']+", text.lower()))
+    event_words = {
+        "reveal", "reveals", "revealed", "truth", "secret", "secrets",
+        "realize", "realizes", "realized", "betrayal", "betrays", "death",
+        "dies", "killed", "attack", "battle", "rumbling", "power", "cost",
+        "price", "shocking", "suddenly", "finally", "turns", "twist",
+    }
+    if not words.intersection(event_words):
+        return None
+    matches = [p for p in files if "impact" in p.stem.lower() or "hit" in p.stem.lower()]
+    if not matches:
+        # Backwards-compatible fallback for user-supplied descriptive names.
+        matches = [p for p in files if any(token in p.stem.lower() for token in words if len(token) > 3)]
+    if not matches:
+        return None
+    digest = hashlib.sha256(text.encode("utf-8")).digest()
+    return matches[digest[0] % len(matches)]
 
 
 def read_credit(path: Path) -> str:
@@ -135,13 +156,13 @@ def build_beat_frame(image_path: Path, beat_text: str, output: Path) -> None:
     frame = background.convert("RGBA")
     draw = ImageDraw.Draw(frame)
 
-    # Reference style: only the original still, centered uppercase captions,
-    # one red emphasis word, and the creator's small handle at the bottom.
-    draw_centered_subtitle(draw, beat_text)
-    handle_font = font(34, True)
+    # One short word group per frame; the handle stays beneath the caption,
+    # above the platform's bottom title and subscribe controls.
+    caption_bottom = draw_centered_subtitle(draw, beat_text)
+    handle_font = font(30, True)
     handle_box = draw.textbbox((0, 0), CHANNEL_HANDLE, font=handle_font, stroke_width=3)
-    handle_x = (WIDTH - (handle_box[2] - handle_box[0])) // 2
-    handle_y = int(HEIGHT * 0.855)
+    handle_x = int(CAPTION_CENTER_X - (handle_box[2] - handle_box[0]) / 2)
+    handle_y = max(int(HEIGHT * 0.695), caption_bottom + 24)
     draw.text((handle_x, handle_y), CHANNEL_HANDLE, font=handle_font, fill=SUBTITLE_WHITE,
               stroke_width=3, stroke_fill="#000000")
     frame.convert("RGB").save(output, format="JPEG", quality=92, optimize=True)
@@ -150,6 +171,76 @@ def build_beat_frame(image_path: Path, beat_text: str, output: Path) -> None:
 def audio_duration(path: Path) -> float:
     with wave.open(str(path), "rb") as wav:
         return wav.getnframes() / float(wav.getframerate())
+
+
+def _group_words(words: list[dict]) -> list[list[dict]]:
+    """Split a visual beat into short, readable captions of up to five words."""
+    count = len(words)
+    if count <= 5:
+        return [words] if words else []
+    group_count = max(2, (count + 4) // 5)
+    base, extra = divmod(count, group_count)
+    groups: list[list[dict]] = []
+    cursor = 0
+    for index in range(group_count):
+        size = base + (1 if index < extra else 0)
+        groups.append(words[cursor:cursor + size])
+        cursor += size
+    return groups
+
+
+def build_caption_segments(beats: list[dict], aligned_words: list[dict], duration: float) -> list[dict]:
+    """Return one timed frame per 3–5-word caption, retaining its beat's still."""
+    valid_words = []
+    for word in (aligned_words or []):
+        text = str(word.get("text", "")).strip()
+        try:
+            start, end = float(word["start"]), float(word["end"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if text and end > start:
+            valid_words.append({"text": text, "start": start, "end": end})
+    valid_words.sort(key=lambda item: item["start"])
+
+    segments: list[dict] = []
+    for index, beat in enumerate(beats):
+        beat_start = max(0.0, float(beat.get("start", 0.0)))
+        beat_end = (max(beat_start + 0.05, float(beats[index + 1].get("start", duration)))
+                    if index + 1 < len(beats) else duration)
+        beat_end = min(duration, beat_end)
+        beat_end = max(beat_start + 0.05, beat_end)
+        beat_words = [
+            word for word in valid_words
+            if beat_start <= (word["start"] + word["end"]) / 2 < beat_end
+        ]
+        has_word_timing = bool(beat_words)
+        if not beat_words:
+            beat_words = [{"text": word} for word in str(beat.get("text", "")).split()]
+        groups = _group_words(beat_words)
+        if not groups:
+            continue
+
+        cursor = beat_start
+        total_words = sum(len(group) for group in groups)
+        for group_index, group in enumerate(groups):
+            if has_word_timing:
+                start = beat_start if group_index == 0 else max(cursor, float(group[0]["start"]))
+                end = (max(start + 0.05, float(groups[group_index + 1][0]["start"]))
+                       if group_index + 1 < len(groups) else beat_end)
+            else:
+                start = cursor
+                group_weight = len(group) / max(1, total_words)
+                end = (beat_end if group_index + 1 == len(groups)
+                       else start + (beat_end - beat_start) * group_weight)
+            end = min(beat_end, max(start + 0.05, end))
+            segments.append({
+                "image_path": str(beat.get("image_path", "")),
+                "text": " ".join(str(word["text"]) for word in group),
+                "start": start,
+                "end": end,
+            })
+            cursor = end
+    return segments
 
 
 def render_from_beats(beats_path: Path, output_path: Path) -> None:
@@ -175,29 +266,44 @@ def render_from_beats(beats_path: Path, output_path: Path) -> None:
 
     topic = str(data.get("topic", "Short"))
     print(f"[1/4] Loading {len(beats)} reviewed stills…", flush=True)
-    images: list[Path] = []
     for beat in beats:
         image = resolve_path(str(beat["image_path"]))
         if not image.is_file():
             raise FileNotFoundError(f"Beat {beat['beat']} image is missing: {image}")
-        images.append(image)
 
-    # Cut points are the beat start times; each still shows until the next beat
-    # begins, so images change in sync with the narration and cover all audio.
+    # Still changes follow the reviewed beat timestamps. Captions within each
+    # still are split into short, timed groups using ElevenLabs word alignment.
     starts = [max(0.0, float(b.get("start", 0.0))) for b in beats]
     starts[0] = 0.0
-    cuts = starts + [duration]
-    durations = [max(0.1, cuts[i + 1] - cuts[i]) for i in range(len(beats))]
+    beat_cuts = starts + [duration]
+    alignment_path = beats_path.parent / "alignment.json"
+    alignment = json.loads(alignment_path.read_text(encoding="utf-8")) if alignment_path.is_file() else {}
+    segments = build_caption_segments(beats, alignment.get("words", []), duration)
+    if not segments:
+        raise ValueError("No subtitle segments could be built from the narration.")
+    durations = [max(0.05, float(segment["end"]) - float(segment["start"])) for segment in segments]
 
-    print("[2/4] Building bold phone-safe subtitle frames…", flush=True)
+    print(f"[2/4] Building {len(segments)} word-synced caption frames (4–5 words each)…", flush=True)
     frames: list[Path] = []
-    for i, beat in enumerate(beats):
-        frame = assets / f"frame-{i + 1:02d}.jpg"
-        build_beat_frame(images[i], str(beat.get("text", "")), frame)
+    for i, segment in enumerate(segments):
+        frame = assets / f"frame-{i + 1:03d}.jpg"
+        image = resolve_path(segment["image_path"])
+        build_beat_frame(image, str(segment["text"]), frame)
         frames.append(frame)
 
     music = choose_music(topic)
-    sound_effects = [choose_sound_effect(str(b.get("text", "")) + " " + str(b.get("search_query", ""))) for b in beats]
+    # Keep effects sparse (at most three per Short) so they punctuate key
+    # moments without competing with the ElevenLabs narration.
+    sound_effects: list[Path | None] = []
+    last_sfx_at = -999.0
+    for i, beat in enumerate(beats):
+        effect = choose_sound_effect(str(beat.get("text", "")))
+        beat_time = beat_cuts[i]
+        if effect and (len([item for item in sound_effects if item]) >= 3 or beat_time - last_sfx_at < 4.0):
+            effect = None
+        if effect:
+            last_sfx_at = beat_time
+        sound_effects.append(effect)
     credits = [c for c in (read_credit(p) for p in [music, *sound_effects] if p) if c]
     attribution_path = assets / "attribution.txt"
     if credits:
@@ -223,7 +329,7 @@ def render_from_beats(beats_path: Path, output_path: Path) -> None:
     for i, effect in enumerate(sound_effects):
         if effect:
             command.extend(["-i", str(effect)])
-            sfx_inputs.append((next_audio_index, int(max(0.0, cuts[i]) * 1000)))
+            sfx_inputs.append((next_audio_index, int(max(0.0, beat_cuts[i]) * 1000)))
             next_audio_index += 1
 
     filters = []
@@ -243,7 +349,7 @@ def render_from_beats(beats_path: Path, output_path: Path) -> None:
         mix_labels = ["[voicemix]", "[ducked]"]
     for i, (input_index, delay) in enumerate(sfx_inputs):
         label = f"sfx{i}"
-        audio_filters.append(f"[{input_index}:a]adelay={delay}|{delay},volume=0.22[{label}]")
+        audio_filters.append(f"[{input_index}:a]adelay={delay}|{delay},volume=0.12[{label}]")
         mix_labels.append(f"[{label}]")
     if len(mix_labels) == 1:
         audio_filters.append("[voice]anull[aout]")

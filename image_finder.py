@@ -3,9 +3,12 @@
 Given an approved short's narration and its word-level timing, this agent:
   * divides the narration into 10-15 visual beats, each the exact sentence or
     phrase being spoken plus its start and end time from the alignment data,
-  * builds each beat's search query from the show/topic name plus the beat's
-    own keywords, so results stay on-subject (the license gate still ensures
-    only openly licensed images, never copyrighted show frames, are used),
+  * builds each beat's search query from the beat's own thematic description —
+    the scene's idea in openly reusable terms — and never from the show or
+    franchise name: a topic that names a copyrighted show grants no rights to
+    its imagery, and folding that name into an open-license search only surfaces
+    mislabeled fan uploads of copyrighted characters. The result is an honest
+    thematic match, recorded as illustrative, not an exact franchise frame.
   * finds one relevant, legally reusable still image per beat,
   * verifies each image's reuse terms, downloads it into the render's private
     assets folder, and records full source-and-license provenance.
@@ -231,12 +234,19 @@ def time_beats(beat_texts: list[str], words: list[dict], duration: float) -> lis
 
 
 # --------------------------------------------------------------------------- #
-# Query derivation: the show/topic name + the beat's own keywords.
-# (The license gate still applies, so Openverse/Wikimedia only ever return
-# openly licensed images — never copyrighted show frames or promo art.)
+# Query derivation: the beat's own thematic description, never the franchise.
+#
+# A topic that names a copyrighted show (an anime, a series, a film) grants no
+# rights to its imagery. Searching an open-license library for that name does
+# not return the real show — it returns whatever someone mislabeled with it,
+# which tends to be fan uploads of copyrighted characters. So queries describe
+# the scene's idea in openly reusable, real-world terms (a place, setting,
+# object, mood, or concept). An exact subject is preferred only when it is
+# itself legally reusable; otherwise the match is an honest thematic one,
+# recorded as illustrative. The franchise name is never used as a search anchor.
 # --------------------------------------------------------------------------- #
 # Words from a topic that describe the *angle* rather than the show/subject;
-# dropped when extracting the show name so queries stay on the subject.
+# dropped when extracting the show name so the recorded subject stays clean.
 ANGLE_WORDS = {
     "why", "how", "what", "the", "a", "an", "of", "is", "isn't", "are", "and", "or",
     "explained", "explainer", "analysis", "theory", "breakdown", "really", "actually",
@@ -245,7 +255,12 @@ ANGLE_WORDS = {
 
 
 def subject_phrase(topic: str, title: str) -> str:
-    """The show / anime / topic name used to anchor every image search.
+    """The show / anime / topic name, kept only for the record and logs.
+
+    It is NOT used to build image searches (see the note above): anchoring an
+    open-license search on a franchise name surfaces mislabeled copyrighted
+    imagery. It is stored in beats.json so the creator can see the topic the
+    plan was built from.
 
     Keeps short franchise labels split by a colon (for example "Cyberpunk:
     Edgerunners") while discarding explanatory text after the show name."""
@@ -276,18 +291,19 @@ def content_keywords(text: str, limit: int = 3) -> list[str]:
     return seen
 
 
-def query_variants(beat_text: str, subject: str) -> list[str]:
-    """Ordered search queries to try: the show name plus this beat's keywords
-    first, then the show name alone, then the keywords alone as a fallback so a
-    beat can still be filled when the show-specific search finds nothing."""
-    keywords = content_keywords(beat_text, 3)
+def query_variants(beat_text: str) -> list[str]:
+    """Thematic search queries for a beat when Claude supplied no image_query.
+
+    Built only from the beat's own salient keywords — the scene's idea in
+    reusable terms — never the franchise name, so the search stays an honest
+    thematic match rather than a hunt for copyrighted show imagery. Broader
+    keyword subsets follow so the beat can still be filled."""
+    keywords = content_keywords(beat_text, 4)
     variants: list[str] = []
-    if subject and keywords:
-        variants.append(f"{subject} {' '.join(keywords[:2])}")
-    if subject:
-        variants.append(subject)
     if keywords:
         variants.append(" ".join(keywords[:3]))
+        if len(keywords) > 2:
+            variants.append(" ".join(keywords[:2]))
     out: list[str] = []
     for variant in variants:
         cleaned = variant.strip()
@@ -324,21 +340,22 @@ def claude_visual_beats(draft: dict, script: str) -> tuple[list[str], list[str]]
     return phrases, queries
 
 
-def beat_query_variants(image_query: str, subject: str) -> list[str]:
-    """Anchor every image query in the series name before trying broad fallbacks."""
+def beat_query_variants(image_query: str) -> list[str]:
+    """Search queries from Claude's thematic image requirement for a beat.
+
+    The requirement already describes the subject to show in openly reusable,
+    real-world terms. We search it directly, then fall back to its salient
+    keywords, and never fold in the show or franchise name — doing so would turn
+    an honest thematic search into a hunt for copyrighted character imagery."""
     query = (image_query or "").strip()
     variants: list[str] = []
     if query:
-        variants.append(f"{subject} {query}".strip() if subject else query)
-        if subject:
-            variants.append(subject)
-        keywords = content_keywords(query, 3)
-        if keywords and subject:
-            variants.append(f"{subject} {' '.join(keywords[:2])}")
-        elif keywords:
+        variants.append(query)
+        keywords = content_keywords(query, 4)
+        if keywords:
             variants.append(" ".join(keywords[:3]))
-    if subject:
-        variants.append(subject)
+            if len(keywords) > 2:
+                variants.append(" ".join(keywords[:2]))
     out: list[str] = []
     for variant in variants:
         cleaned = variant.strip()
@@ -550,9 +567,9 @@ def candidate_to_source(candidate: Candidate, width: int, height: int, query: st
 def search_and_download(queries: list[str] | str, target_base: Path, exclude_urls: set[str] | None = None
                         ) -> tuple[dict, Path] | tuple[None, None]:
     """Try each query in order across the providers; return the first validated,
-    licensed image as (source_dict, saved_path). Earlier queries are more
-    specific (show name + keywords), later ones broader, so the result is as
-    on-topic as the libraries allow while still filling the beat."""
+    licensed image as (source_dict, saved_path). Earlier queries are the beat's
+    full thematic description, later ones broader keyword subsets, so the result
+    is as on-topic as the libraries allow while still filling the beat."""
     if isinstance(queries, str):
         queries = [queries]
     exclude = exclude_urls or set()
@@ -590,7 +607,9 @@ def build_attribution_block(beats: list[dict]) -> str:
         any_credit = True
         extra = [x for x in (source.get("license_url"), source.get("source_page_url")) if x]
         suffix = (" — " + " — ".join(extra)) if extra else ""
-        lines.append(f"- Beat {beat['beat']}: {credit} (via {source.get('provider', '')}){suffix}")
+        # Keep the public description focused on creator/license attribution.
+        # The provider name remains recorded in media_manifest.json.
+        lines.append(f"- Beat {beat['beat']}: {credit}{suffix}")
     return "\n".join(lines) if any_credit else ""
 
 
@@ -677,9 +696,9 @@ def save_beats(assets_dir: Path, data: dict) -> None:
 
 
 def relevance_for(query: str) -> str:
-    return (f"Search matched \"{query}\" (the topic/show name plus this beat's keywords where available). "
-            "Sourced from a public-domain or openly licensed library — an openly licensed image related to "
-            "the subject, not a copyrighted show frame or promotional art.")
+    return (f"Illustrative thematic match for \"{query}\". Sourced from a public-domain or openly licensed "
+            "library and selected for the scene's theme rather than the exact franchise — an openly licensed "
+            "image, never a copyrighted show frame, character render, or promotional art.")
 
 
 # --------------------------------------------------------------------------- #
@@ -703,7 +722,7 @@ def plan(assets_dir: Path, draft: dict) -> dict:
     else:
         beat_texts = split_into_beats(script)
         image_queries = [""] * len(beat_texts)
-        source_note = "heuristic (show name + beat keywords; no usable Claude beats)"
+        source_note = "heuristic (thematic beat keywords; no usable Claude beats)"
     spans = time_beats(beat_texts, words, duration)
 
     # Preserve creator-supplied (manual) images across a re-plan: keep any prior
@@ -724,7 +743,7 @@ def plan(assets_dir: Path, draft: dict) -> dict:
     for index, (text, (start, end)) in enumerate(zip(beat_texts, spans)):
         number = index + 1
         requirement = image_queries[index] if index < len(image_queries) else ""
-        variants = beat_query_variants(requirement, subject) if requirement else query_variants(text, subject)
+        variants = beat_query_variants(requirement) if requirement else query_variants(text)
         query = variants[0] if variants else text
         keep = preserved.get(text.strip())
         if keep:
@@ -749,8 +768,8 @@ def plan(assets_dir: Path, draft: dict) -> dict:
             beat["status"] = "ok"
             beat["source"] = source
             beat["search_query"] = source.get("search_query", query)
-            beat["relevance_note"] = (f"Requirement: {requirement}. Matched \"{beat['search_query']}\" from an "
-                                      "openly licensed library (not a copyrighted frame)." if requirement
+            beat["relevance_note"] = (f"Requirement: {requirement}. Illustrative thematic match \"{beat['search_query']}\" "
+                                      "from an openly licensed library — never a copyrighted frame, character render, or poster." if requirement
                                       else relevance_for(beat["search_query"]))
             log(f"[1/1] Beat {number}: {source['license_name']} from {source['provider']} "
                 f"for \"{beat['search_query']}\".")
@@ -792,18 +811,18 @@ def retry_beat(assets_dir: Path, number: int, query_override: str | None = None)
     beat = next((b for b in beats if b["beat"] == number), None)
     if beat is None:
         raise ValueError(f"Beat {number} does not exist.")
-    subject = str(data.get("subject", "")).strip()
     override = (query_override or "").strip()
     requirement = str(beat.get("image_query", "")).strip()
     if override:
-        # Honour the creator's exact terms, but still try the show name + their
-        # terms first when a subject is known.
-        queries = ([f"{subject} {override}", override] if subject else [override])
+        # Honour the creator's exact search terms as given, with a keyword
+        # fallback. The franchise name is never prepended (see beat_query_variants).
+        keywords = content_keywords(override, 3)
+        queries = [override] + ([" ".join(keywords[:2])] if keywords else [])
         queries = list(dict.fromkeys(q for q in queries if q))
     elif requirement:
-        queries = beat_query_variants(requirement, subject)
+        queries = beat_query_variants(requirement)
     else:
-        queries = query_variants(beat.get("text", ""), subject)
+        queries = query_variants(beat.get("text", ""))
     primary = queries[0] if queries else beat.get("search_query", "")
     exclude = set()
     current = beat.get("source") or {}

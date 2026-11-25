@@ -18,15 +18,16 @@ The component's only responsibility is image discovery, license checks, download
 
 ## Image-finding workflow
 
-1. Accept the short's title, topic, approved script, and scene plan. Each scene should provide a concise `visual_query` and a description of what the image needs to communicate.
-2. Search for images that illustrate the scene's specific idea. Prefer an exact subject when it is legally reusable; otherwise find an honest thematic match and record that it is illustrative.
-3. Download one usable image per scene. Search a small number of results per scene; do not make a separate Claude request for each image. Prefer a source's documented search API or documented download flow. Do not scrape pages or bypass access controls, rate limits, or download restrictions.
-4. Validate that each downloaded file is a readable still image, within reasonable file-size and dimension limits, and corresponds to the selected result. Reject broken files, unrelated images, watermarks that obscure the subject, and unsuitable content.
-5. Save the accepted images under the current render's private work directory, for example:
+1. Accept the short's title, topic, approved script, and scene plan. Each scene provides a concise `visual_query` (e.g., character name, specific episode moment, or anime title) and a description of what the image needs to communicate.
+2. Search for exact-match still images from the actual show, anime, or media referenced in the scene—including episode screenshots, official promotional art, key visuals, and character stills. Do not fall back to generic stock photos unless no media-specific image exists.
+3. Download one usable image per scene. Use general web image search APIs (e.g., Google Custom Search, SerpApi, Bing Image Search) and anime/media databases (e.g., AniList, Jikan/MyAnimeList, TMDb) with **no license or Creative Commons filtering enabled** (do not pass `rights`, `license`, or `cc_publicdomain` query parameters). Do not make a separate Claude request for each image.
+4. Validate that each downloaded file is a readable, high-resolution still image (JPEG/PNG/WebP) that matches the query. Reject broken files, low-resolution thumbnails, heavy stock-agency watermarks (e.g., Getty/Shutterstock), and unrelated images.
+5. Save the accepted images under the current render's private work directory:
 
    ```text
    work/renders/<short-id>-assets/images/scene-01.jpg
-   work/renders/<short-id>-assets/images/scene-02.jpg
+   work/renders/<short-id>-assets/images/scene-02.jpg``
+
    ```
 
 6. Write a `media_manifest.json` beside the images. Include, for every scene: scene number, local filename, source page URL, direct download URL if permitted, creator/uploader, license name, license URL, required attribution text, retrieval date, search query, and a short relevance note. Do not claim a license is verified when the source does not provide enough information to verify it.
